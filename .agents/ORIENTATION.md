@@ -1,5 +1,11 @@
-# Project Orientation
+# Agent Orientation
 
-## Core Architecture
-- `calculator.py`: Pure mathematical helper functions (`add`, `subtract`, `multiply`, `divide`).
-- `test_calculator.py`: Pytest suite covering all mathematical operations and edge cases (e.g. division by zero).
+## System Overview
+- Repository: `test_agent_fleet`
+- Core Modules: `calculator.py`
+- Test Suites: `test_calculator.py`
+
+## Active Rules
+- Trust and Blame protocol: map symbols via outline before editing.
+- Ensure all tests pass via `pytest`.
+- Update `.agents/CHECKPOINT.md` on task completion.

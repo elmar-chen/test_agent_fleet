@@ -1,6 +1,7 @@
-# Agent System Guidelines
+# AGENTS.md - Invariants & Rules
 
-## Prime Directive
-- Write surgical, high-quality code changes and accompanying unit tests.
-- Always run `pytest` to ensure 100% green test pass rate before reporting.
-- Update `.agents/CHECKPOINT.md` with baseline test counts and task status.
+## Invariants
+- Code changes must be surgical and minimal.
+- All core functions must be accompanied by unit tests.
+- 100% pytest pass rate mandatory before completion.
+- Baseline test count must be maintained and tracked in `.agents/CHECKPOINT.md`.
