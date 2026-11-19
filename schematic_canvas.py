@@ -1,5 +1,7 @@
 from typing import Dict, List, Optional, Tuple, Union, Any
 from circuit_store import CircuitStore, Component
+from schematic_grid import SCHEMATIC_GRID_DEFINITIONS, get_schematic_grid
+from builtin_components import BUILTIN_COMPONENTS, get_builtin_component
 
 # Export alias for SchematicComponent
 SchematicComponent = Component
@@ -71,7 +73,8 @@ class GhostPreview:
 class SchematicCanvas:
     """SchematicCanvas (符号图) handling drag-and-drop, 20px orthogonal grid snapping,
 
-    100x100 ghost preview rendering, and component placement & auto-selection.
+    100x100 ghost preview rendering, component placement & auto-selection,
+    and pin coordinate deduplication.
     """
 
     GRID_SIZE: int = 20
@@ -247,3 +250,99 @@ class SchematicCanvas:
     def render_ghost_preview(self) -> Dict[str, Any]:
         """Renders/returns the 100x100 symbol ghost preview box configuration."""
         return self.ghost_preview_obj.to_dict()
+
+    def deduplicate_pins(self, pins: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Deduplicates overlapping schematic pins by their local coordinates (localX, localY),
+
+        ensuring only a single interactive dot is rendered per unique coordinate position.
+        """
+        seen: Dict[Tuple[float, float], Dict[str, Any]] = {}
+        unique_pins: List[Dict[str, Any]] = []
+
+        for pin in pins:
+            if "localX" in pin and "localY" in pin:
+                lx = float(pin["localX"])
+                ly = float(pin["localY"])
+            elif "gxOffset" in pin and "gyOffset" in pin:
+                lx = float(pin["gxOffset"]) + 50.0
+                ly = float(pin["gyOffset"]) + 50.0
+            else:
+                lx = 0.0
+                ly = 0.0
+
+            coord_key = (round(lx, 4), round(ly, 4))
+
+            if coord_key not in seen:
+                pin_data = dict(pin)
+                pin_data["localX"] = lx
+                pin_data["localY"] = ly
+                pin_data["merged_pin_ids"] = [pin.get("id")]
+                if "logicalPort" in pin:
+                    pin_data["merged_ports"] = [pin.get("logicalPort")]
+                seen[coord_key] = pin_data
+                unique_pins.append(pin_data)
+            else:
+                existing = seen[coord_key]
+                if pin.get("id") and pin.get("id") not in existing.get("merged_pin_ids", []):
+                    existing.setdefault("merged_pin_ids", []).append(pin.get("id"))
+                if "logicalPort" in pin:
+                    if "merged_ports" not in existing:
+                        existing["merged_ports"] = []
+                    if pin.get("logicalPort") not in existing["merged_ports"]:
+                        existing["merged_ports"].append(pin.get("logicalPort"))
+
+        return unique_pins
+
+    def get_component_pins(
+        self, component_or_type: Union[Component, str, Dict[str, Any]], deduplicate: bool = True
+    ) -> List[Dict[str, Any]]:
+        """Returns the schematic pins for a component or component type.
+
+        If deduplicate is True (default), overlapping pins sharing identical coordinates
+        are merged into a single pin definition.
+        """
+        if isinstance(component_or_type, Component):
+            ctype = component_or_type.component_type
+        elif isinstance(component_or_type, dict):
+            ctype = component_or_type.get("component_type") or component_or_type.get("type", "")
+        else:
+            ctype = str(component_or_type)
+
+        grid_def = get_schematic_grid(ctype)
+        raw_pins = grid_def.get("pins", [])
+
+        if deduplicate:
+            return self.deduplicate_pins(raw_pins)
+        return raw_pins
+
+    getComponentPins = get_component_pins
+
+    def render_interactive_dots(
+        self, component: Component, deduplicate: bool = True
+    ) -> List[Dict[str, Any]]:
+        """Renders interactive dots for a component on the schematic canvas.
+
+        Each dot includes localX, localY, absolute x, absolute y, normalAngleDeg,
+        and merged pin IDs. Deduplicates overlapping pins at the same coordinates.
+        """
+        pins = self.get_component_pins(component, deduplicate=deduplicate)
+        dots: List[Dict[str, Any]] = []
+
+        for pin in pins:
+            lx = float(pin.get("localX", 0.0))
+            ly = float(pin.get("localY", 0.0))
+            dot = {
+                "id": pin.get("id"),
+                "localX": lx,
+                "localY": ly,
+                "absX": component.x + lx,
+                "absY": component.y + ly,
+                "normalAngleDeg": pin.get("normalAngleDeg", 0),
+                "logicalPort": pin.get("logicalPort"),
+                "merged_pin_ids": pin.get("merged_pin_ids", [pin.get("id")]),
+            }
+            dots.append(dot)
+
+        return dots
+
+    renderInteractiveDots = render_interactive_dots
